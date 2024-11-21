@@ -1,57 +1,40 @@
-# aiarena-docker
-https://hub.docker.com/r/aiarena/arenaclient
+# aiarena-docker-base
 
-## Local play
+A collection of base images used by the [AI Arena Match Controller](https://github.com/aiarena/sc2-ai-match-controller).
 
-If you're just looking for a way to play local matches using docker, check out the [local-play-bootstrap](https://github.com/aiarena/local-play-bootstrap).
+## [arenaclient-sc2-base](https://hub.docker.com/r/aiarena/arenaclient-sc2-base)
 
-## Build
+**Dockerfile: [docker/Dockerfile.sc2](docker/Dockerfile.sc2)**  
+This image contains the SC2 game pre-installed.
 
-For general usage, we advise against building the image yourself - refer to the local-play-bootstrap above instead.  
-Use the following command to build image with name `aiarena`:
+## [arenaclient-bot-base](https://hub.docker.com/r/aiarena/arenaclient-bot-base)
 
+**Dockerfile: [docker/Dockerfile.bot](docker/Dockerfile.bot)**  
+This image contains all the different technologies and dependencies for agents to run in the AI Arena.
+
+### Bumping the Python version
+
+To bump the python version: 
+1. Set the `PYTHON_VERSION` environment variable in the [Dockerfile](docker/Dockerfile.bot) to the desired version. This will ensure it is installed in the image.
+2. Update the `python` version range entry in the [pyproject.toml](pyproject.toml). This will ensure compatible dependencies are installed.
+3. Follow the steps below to bump the dependencies and generate a report as they might change based upon the new python version.
+
+### Bumping Python dependencies and generating a report
+
+The [pyproject.toml](pyproject.toml) file describes required dependencies for the bot image.  
+To bump the dependencies, first set any specifically desired versions (or leave them as "*") in the `pyproject.toml` file.  
+Then run the following command:
 ```
-docker build -t aiarena/arenaclient:latest --build-arg PYTHON_VERSION=3.9 --build-arg SC2_VERSION=4.10 --build-arg VERSION_NUMBER=1.0.0 .
+# Report the previous requirements.txt file
+PREVIOUS_VERSION=v0.0.0  # the previous version arenaclient-bot-base image that we're comparing to
+# Take the requirements output from the console of the following command and save it to before.requirements.txt
+docker run -it aiarena/arenaclient-bot-base:${PREVIOUS_VERSION} bash -c "pip install poetry && poetry export -f requirements.txt --without-hashes"
+
+# This will build the bot image and then run `poetry update` which will update the `poetry.lock` file with the latest versions.
+# After running this, copy the requirements.txt content output from the console and save it to after.requirements.txt
+# Note: if you don't get the requirements.txt content output, it likely means something failed.
+docker compose -f docker/docker-compose.yml run --rm --build poetry-update
+
+# This will generate a report showing the changes made.
+python ./requirements_diff.py
 ```
-
-## Tests
-
-See ``test_docker_image.sh`` which builds both local dockerfiles and then runs the aiarena client with several bots and checks the results with expected outcomes.
-
-## Usage
-
-This docker can be used to run AI Arena ladder on a local machine.
-Follow the steps below to configure and run an example match between two standard bots.
-
-1. [Build](#Build) an image.
-2. Copy file named `example_local_config.py` and rename its copy to `config.py`. If necessary, adjust
-  any parameters inside.
-3. Download the latest aiarena bots:
-
-  ```
-  git clone https://github.com/aiarena/aiarena-test-bots
-  ```
-
-  If you want to use other bots, you can download them as well.
-4. Download [the latest maps](https://aiarena.net/wiki/maps/) for AI Arena ladder and unpack them
-  into some empty directory.
-5. Now create a file called `matches` with the following content:
-
-  ```
-  # Bot1 name, Bot1 race, Bot1 type, Bot2 name, Bot2 race, Bot2 type, Map
-  basic_bot,T,python,loser_bot,T,python,DeathAuraLE
-  ```
-
-  You can add more matches if you want.
-6. Run the docker container:
-
-  ```
-  export CONFIG_PATH="/path/to/your/config.py"
-  export MATCHES_PATH="/path/to/your/matches"
-  export BOTS_PATH="/path/to/your/bots"
-  export MAPS_PATH="/path/to/your/maps"
-  export REPLAYS_PATH="/path/to/new/empty/directory"
-  docker run -v ${CONFIG_PATH}:/root/aiarena-client/config.py -v ${MATCHES_PATH}:/root/aiarena-client/matches -v ${BOTS_PATH}:/root/aiarena-client/bots -v ${MAPS_PATH}:/root/StarCraftII/maps ${REPLAYS_PATH}:/root/aiarena-client/replays:rw -v -it aiarena/arenaclient:latest
-  ```
-
-  After the command completes, replays will be available in `$REPLAYS_PATH` directory.
